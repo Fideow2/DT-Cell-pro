@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import Cell, { calculateStats } from './components/Cell';
 import type { CellDNA } from './components/Cell';
+import { AVAILABLE_ITEMS } from './components/items';
 
 function App() {
   const [dna, setDna] = useState<CellDNA>({
@@ -17,11 +18,30 @@ function App() {
     seed: 'cell-1',
   });
 
+  const [items, setItems] = useState<string[]>([]);
+
   const handleChange = (key: keyof CellDNA, value: number | string) => {
     setDna((prev) => ({ ...prev, [key]: value }));
   };
 
-  const stats = calculateStats(dna);
+  const toggleItem = (id: string) => {
+    setItems(prev => {
+      const item = AVAILABLE_ITEMS.find(i => i.id === id);
+      if (!item) return prev;
+
+      // If it's a main-hand or off-hand item, remove other items of the same type
+      if (item.type === 'main-hand' || item.type === 'off-hand') {
+        const otherItemsOfSameType = AVAILABLE_ITEMS.filter(i => i.type === item.type && i.id !== id).map(i => i.id);
+        const newItems = prev.filter(i => !otherItemsOfSameType.includes(i));
+        return newItems.includes(id) ? newItems.filter(i => i !== id) : [...newItems, id];
+      }
+      
+      // For other items, just toggle
+      return prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
+    });
+  };
+
+  const stats = calculateStats(dna, items);
 
   return (
     <div className="app-container">
@@ -29,7 +49,7 @@ function App() {
       
       <div className="main-content">
         <div className="cell-preview">
-          <Cell dna={dna} />
+          <Cell dna={dna} items={items} />
           <div className="stats-panel" style={{ marginTop: '20px', padding: '15px', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', border: '1px solid #ccc' }}>
             <h3 style={{ marginTop: 0 }}>Cell Stats</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', textAlign: 'left' }}>
@@ -42,6 +62,22 @@ function App() {
         </div>
 
         <div className="controls">
+          <div className="control-group">
+            <label>Equipment</label>
+            <div className="items-grid">
+              {AVAILABLE_ITEMS.map(item => (
+                <button 
+                  key={item.id} 
+                  onClick={() => toggleItem(item.id)}
+                  className={`item-btn ${items.includes(item.id) ? 'active' : ''}`}
+                  title={item.name}
+                >
+                  <img src={item.src} alt={item.name} />
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="control-group">
             <label>Color (Hue)</label>
             <input
