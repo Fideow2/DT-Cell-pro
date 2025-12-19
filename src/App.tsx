@@ -3,8 +3,11 @@ import './App.css';
 import Cell, { calculateStats } from './components/Cell';
 import type { CellDNA } from './components/Cell';
 import { AVAILABLE_ITEMS } from './components/items';
+import Menu from './components/Menu';
+import PetriDish from './components/PetriDish';
 
 function App() {
+  const [view, setView] = useState<'menu' | 'game' | 'petri-dish'>('menu');
   const [dna, setDna] = useState<CellDNA>({
     colorHue: 80, // Lime Green
     size: 1,
@@ -43,9 +46,20 @@ function App() {
 
   const stats = calculateStats(dna, items);
 
+  if (view === 'menu') {
+    return <Menu onStartGame={() => setView('game')} onStartPetriDish={() => setView('petri-dish')} />;
+  }
+
+  if (view === 'petri-dish') {
+    return <PetriDish onBack={() => setView('menu')} />;
+  }
+
   return (
     <div className="app-container">
-      <h1>Procedural Cell Generator</h1>
+      <div className="header">
+        <button className="back-btn" onClick={() => setView('menu')}>← 返回菜单</button>
+        <h1>Procedural Cell Generator</h1>
+      </div>
       
       <div className="main-content">
         <div className="cell-preview">

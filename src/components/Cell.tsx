@@ -98,9 +98,12 @@ export const calculateStats = (dna: CellDNA, items: string[] = []) => {
 interface CellProps {
   dna: CellDNA;
   items?: string[];
+  id?: string;
+  rotation?: number; // in degrees
+  flipX?: boolean;
 }
 
-const Cell: React.FC<CellProps> = ({ dna, items = [] }) => {
+const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = false }) => {
   const {
     colorHue,
     size,
@@ -210,7 +213,7 @@ const Cell: React.FC<CellProps> = ({ dna, items = [] }) => {
     `;
   };
 
-  const gradientId = `cellGradient-${colorHue}`;
+  const gradientId = id ? `cellGradient-${id}` : `cellGradient-${colorHue}`;
 
   const activeItems = AVAILABLE_ITEMS.filter(item => items.includes(item.id));
 
@@ -349,9 +352,11 @@ const Cell: React.FC<CellProps> = ({ dna, items = [] }) => {
   // Sort layers by zIndex
   layers.sort((a, b) => a.zIndex - b.zIndex);
 
+  const transform = `${flipX ? 'scale(-1, 1)' : ''} rotate(${rotation})`;
+
   return (
-    <div style={{ width: 300, height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <svg width="300" height="300" viewBox="-150 -150 300 300">
+    <div className="cell-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <svg width="100%" height="100%" viewBox="-150 -150 300 300" style={{ maxWidth: '300px', maxHeight: '300px' }}>
         <defs>
           <radialGradient id={gradientId} cx="30%" cy="30%" r="70%">
             <stop offset="0%" stopColor={`hsl(${colorHue}, 70%, 80%)`} />
@@ -359,7 +364,9 @@ const Cell: React.FC<CellProps> = ({ dna, items = [] }) => {
           </radialGradient>
         </defs>
 
-        {layers.map(l => l.content)}
+        <g transform={transform}>
+          {layers.map(l => l.content)}
+        </g>
 
       </svg>
     </div>
