@@ -43,6 +43,8 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
     bacteria: Bacterium[];
     food: Food[];
   }>({ bacteria: [], food: [] });
+  const [isFrozen, setIsFrozen] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<Bacterium | null>(null);
   
   const requestRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number | undefined>(undefined);
@@ -110,6 +112,13 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
 
   const update = useCallback((time: number) => {
     if (lastTimeRef.current !== undefined) {
+      // 如果冷冻模式开启，停止所有更新
+      if (isFrozen) {
+        lastTimeRef.current = time;
+        requestRef.current = requestAnimationFrame(update);
+        return;
+      }
+      
       setGameState(prev => {
         const nextBacteria: Bacterium[] = [];
         const nextFood = [...prev.food];
@@ -270,7 +279,7 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
     }
     lastTimeRef.current = time;
     requestRef.current = requestAnimationFrame(update);
-  }, [createBacterium]);
+  }, [createBacterium, isFrozen]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(update);
@@ -279,16 +288,50 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
     };
   }, [update]);
 
+  const handleCellClick = (bacterium: Bacterium) => {
+    if (isFrozen) {
+      setSelectedCell(bacterium);
+    }
+  };
+
+  const handleDeleteCell = () => {
+    if (selectedCell) {
+      setGameState(prev => ({
+        ...prev,
+        bacteria: prev.bacteria.filter(b => b.id !== selectedCell.id)
+      }));
+      setSelectedCell(null);
+    }
+  };
+
   return (
     <div className="petri-dish-container">
       <div className="petri-dish-header">
-        <button className="back-btn" onClick={onBack}>← 返回菜单</button>
+        <button className="dish-back-btn" onClick={onBack}>← 返回菜单</button>
         <h1>培养皿模式</h1>
         <div className="stats">
           数量: {gameState.bacteria.length} | 食物: {gameState.food.length}
         </div>
+        <button 
+          className="freeze-btn" 
+          onClick={() => {
+            setIsFrozen(!isFrozen);
+            if (!isFrozen) {
+              setSelectedCell(null);
+            }
+          }}
+          style={{ 
+            backgroundColor: isFrozen ? '#10b981' : '#94a3b8',
+            color: 'white',
+          }}
+        >
+          {isFrozen ? '❄️ 已冷冻' : '▶️ 运行中'}
+        </button>
       </div>
-      <div className="dish-viewport" style={{ width: DISH_WIDTH, height: DISH_HEIGHT }}>
+      <div className="dish-viewport" style={{ 
+        width: `${DISH_WIDTH}px`, 
+        height: `${DISH_HEIGHT}px`,
+      }}>
         {gameState.food.map(f => (
           <div 
             key={f.id} 
@@ -304,11 +347,16 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
             <div 
               key={b.id} 
               className="bacterium-wrapper" 
+              onClick={() => handleCellClick(b)}
               style={{ 
                 left: b.x, 
                 top: b.y, 
                 transform: `translate(-50%, -50%) scale(${0.3 * b.dna.size})`,
-                zIndex: Math.floor(b.y)
+                zIndex: Math.floor(b.y),
+                cursor: isFrozen ? 'pointer' : 'default',
+                outline: selectedCell?.id === b.id ? '3px solid #10b981' : 'none',
+                borderRadius: '50%',
+                padding: '10px'
               }}
             >
               <Cell dna={b.dna} id={b.id} rotation={rotation} flipX={flipX} />
@@ -322,9 +370,58 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
           );
         })}
       </div>
+      {isFrozen && selectedCell && (
+        <div className="cell-info-panel">
+          <h3>细胞属性</h3>
+          <div className="info-item">
+            <strong>能量:</strong> 
+            <span>{selectedCell.energy.toFixed(1)} / {REPRODUCTION_ENERGY}</span>
+          </div>
+          <div className="info-item">
+            <strong>健康:</strong> 
+            <span>{selectedCell.health.toFixed(1)} / 100</span>
+          </div>
+          <div className="info-item">
+            <strong>速度:</strong> 
+            <span>{selectedCell.stats.speed}</span>
+          </div>
+          <div className="info-item">
+            <strong>防御:</strong> 
+            <span>{selectedCell.stats.defense}</span>
+          </div>
+          <div className="info-item">
+            <strong>攻击:</strong> 
+            <span>{selectedCell.stats.attack}</span>
+          </div>
+          <div className="info-item">
+            <strong>反应:</strong> 
+            <span>{selectedCell.stats.reaction}</span>
+          </div>
+          <div className="info-item">
+            <strong>大小:</strong> 
+            <span>{selectedCell.dna.size.toFixed(2)}</span>
+          </div>
+          <div className="info-item">
+            <strong>颜色:</strong> 
+            <span style={{
+              display: 'inline-block',
+              width: '18px',
+              height: '18px',
+              backgroundColor: `hsl(${selectedCell.dna.colorHue}, 70%, 50%)`,
+              borderRadius: '50%',
+              border: '2px solid white',
+              boxShadow: '0 0 0 1px #e2e8f0'
+            }}></span>
+          </div>
+          <button onClick={handleDeleteCell} className="delete-btn">
+            🗑️ 删除细胞
+          </button>
+        </div>
+      )}
       <div className="instructions">
         <p>观察细菌的繁衍、变异和自然选择。</p>
         <p>不同颜色的种群会互相攻击。能量充足时会分裂。</p>
+        {isFrozen && <p style={{ color: '#10b981', fontWeight: 'bold' }}>❄️ 冷冻模式：点击细胞查看属性并删除</p>}
       </div>
     </div>
   );

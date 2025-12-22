@@ -3,61 +3,72 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 80vh;
+  min-height: 100vh;
   width: 100%;
+  background: radial-gradient(circle at center, #f0fdf4 0%, #dcfce7 100%);
+  margin: 0;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .menu-title {
-  font-size: 3rem;
-  margin-bottom: 3rem;
-  color: #646cff;
-  text-shadow: 0 0 20px rgba(100, 108, 255, 0.3);
+  font-size: clamp(3rem, 10vw, 5rem);
+  margin-bottom: 4rem;
+  color: #065f46;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-shadow: 0 4px 12px rgba(6, 95, 70, 0.1);
+  text-align: center;
 }
 
 .menu-options {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  width: 100%;
-  max-width: 300px;
+  width: 90%;
+  max-width: 400px;
 }
 
 .menu-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 1rem 2rem;
-  font-size: 1.2rem;
+  gap: 1.2rem;
+  padding: 1.2rem 2.5rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  background-color: #1a1a1a;
-  border: 2px solid #646cff;
-  border-radius: 12px;
-  color: white;
+  background-color: #ffffff;
+  border: 2px solid #10b981;
+  border-radius: 16px;
+  color: #065f46;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .menu-button:hover:not(:disabled) {
-  background-color: #646cff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(100, 108, 255, 0.4);
+  background-color: #10b981;
+  color: white;
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 20px 25px -5px rgba(16, 185, 129, 0.2), 0 10px 10px -5px rgba(16, 185, 129, 0.1);
 }
 
 .menu-button:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 .menu-button.disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
-  border-color: #444;
+  border-color: #94a3b8;
+  background-color: #f1f5f9;
+  color: #64748b;
 }
 
 .button-icon {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
 }
 
 .button-text {
-  letter-spacing: 1px;
+  letter-spacing: 0.05em;
 }

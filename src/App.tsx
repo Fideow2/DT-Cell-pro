@@ -57,7 +57,7 @@ function App() {
   return (
     <div className="app-container">
       <div className="header">
-        <button className="back-btn" onClick={() => setView('menu')}>← 返回菜单</button>
+        <button className="app-back-btn" onClick={() => setView('menu')}>← 返回菜单</button>
         <h1>Procedural Cell Generator</h1>
       </div>
       
