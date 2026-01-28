@@ -9,12 +9,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
-  width: 100%;
-  min-height: 100vh;
-  padding: 40px 20px;
+  gap: 2vh;
+  width: 100vw;
+  height: 100vh;
+  padding: 2vh 2vw;
   box-sizing: border-box;
   background-color: #f8fafc;
+  overflow: hidden;
 }
 
 .header {
@@ -24,7 +25,12 @@
   width: 100%;
   max-width: 1200px;
   position: relative;
-  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: clamp(1.2rem, 3vh, 2rem);
+  margin: 0;
 }
 
 .app-back-btn {
@@ -33,11 +39,13 @@
   background: #f1f5f9;
   color: #475569;
   border: 1px solid #e2e8f0;
-  padding: 0.6rem 1.2rem;
-  border-radius: 12px;
+  padding: 0.8vh 1.5vw;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
+  font-size: clamp(0.75rem, 1.8vh, 0.95rem);
+  white-space: nowrap;
 }
 
 .app-back-btn:hover {
@@ -49,43 +57,52 @@
 .main-content {
   display: flex;
   flex-direction: row;
-  gap: 3rem;
+  gap: 2vw;
   align-items: flex-start;
   flex-wrap: wrap;
   justify-content: center;
   width: 100%;
   max-width: 1200px;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1vh 0;
 }
 
 .cell-preview {
   background: #ffffff;
-  border-radius: 32px;
-  padding: 2rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  border-radius: 20px;
+  padding: 2vh;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  min-width: 350px;
-  min-height: 350px;
+  min-width: min(300px, 40vw);
   border: 1px solid #f1f5f9;
+  flex-shrink: 0;
 }
 
 .cell-container {
-  width: 300px;
-  height: 300px;
+  width: min(300px, 35vw);
+  height: min(300px, 35vw);
 }
 
 .controls {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
+  gap: 1.5vh;
   background: #ffffff;
-  padding: 2.5rem;
-  border-radius: 24px;
-  min-width: 320px;
+  padding: 2vh 2vw;
+  border-radius: 16px;
+  min-width: min(280px, 35vw);
+  max-width: min(400px, 45vw);
   text-align: left;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
   border: 1px solid #f1f5f9;
+  flex-shrink: 0;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .control-group {
@@ -97,7 +114,7 @@
 .control-group label {
   font-weight: 700;
   color: #1e293b;
-  font-size: 0.95rem;
+  font-size: clamp(0.8rem, 1.8vh, 0.95rem);
 }
 
 .control-group input[type="range"] {
@@ -107,7 +124,7 @@
 }
 
 .control-group span {
-  font-size: 0.85rem;
+  font-size: clamp(0.7rem, 1.5vh, 0.85rem);
   color: #64748b;
   text-align: right;
   font-family: monospace;
@@ -115,21 +132,21 @@
 
 .items-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 0.8vh;
 }
 
 .item-btn {
   background: #f8fafc;
   border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 8px;
+  border-radius: 8px;
+  padding: 0.6vh;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   transition: all 0.2s;
-  height: 60px;
+  height: min(60px, 8vh);
 }
 
 .item-btn:hover {
@@ -149,3 +166,60 @@
   object-fit: contain;
 }
 
+/* Responsive adjustments for smaller screens */
+@media (max-width: 900px) {
+  .main-content {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .cell-preview, .controls {
+    width: 90vw;
+    max-width: 500px;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 1vh 2vw;
+  }
+  
+  .header h1 {
+    font-size: clamp(1rem, 2.5vh, 1.5rem);
+  }
+  
+  .cell-preview {
+    padding: 1.5vh;
+    min-width: auto;
+  }
+  
+  .cell-container {
+    width: min(250px, 70vw);
+    height: min(250px, 70vw);
+  }
+  
+  .controls {
+    padding: 1.5vh 3vw;
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: clamp(0.9rem, 2vh, 1.2rem);
+  }
+  
+  .app-back-btn {
+    font-size: clamp(0.65rem, 1.5vh, 0.8rem);
+    padding: 0.6vh 2vw;
+  }
+  
+  .cell-container {
+    width: min(200px, 60vw);
+    height: min(200px, 60vw);
+  }
+  
+  .items-grid {
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+  }
+}

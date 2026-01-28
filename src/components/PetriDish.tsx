@@ -27,8 +27,6 @@ interface PetriDishProps {
   onBack: () => void;
 }
 
-const DISH_WIDTH = 800;
-const DISH_HEIGHT = 600;
 const MAX_BACTERIA = 50;
 const FOOD_SPAWN_RATE = 0.05;
 const MAX_FOOD = 30;
@@ -45,9 +43,42 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
   }>({ bacteria: [], food: [] });
   const [isFrozen, setIsFrozen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<Bacterium | null>(null);
+  const [dishDimensions, setDishDimensions] = useState({ width: 800, height: 600 });
+  
+  const DISH_WIDTH = dishDimensions.width;
+  const DISH_HEIGHT = dishDimensions.height;
   
   const requestRef = useRef<number | undefined>(undefined);
   const lastTimeRef = useRef<number | undefined>(undefined);
+
+  // Calculate dish size based on viewport
+  useEffect(() => {
+    const updateDimensions = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // Reserve space for header (~8vh) and margins (~2vh)
+      const availableHeight = vh * 0.88;
+      const availableWidth = vw * 0.98;
+      
+      // Maintain aspect ratio of 4:3
+      let width = availableWidth;
+      let height = availableWidth * 0.75;
+      
+      if (height > availableHeight) {
+        height = availableHeight;
+        width = availableHeight * 1.33;
+      }
+      
+      setDishDimensions({ 
+        width: Math.floor(width), 
+        height: Math.floor(height) 
+      });
+    };
+    
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
 
   const createBacterium = useCallback((dna: CellDNA, x: number, y: number): Bacterium => {
     const stats = calculateStats(dna, []);
@@ -105,10 +136,10 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
       seed: 'initial',
     };
     setGameState({
-      bacteria: [createBacterium(initialDNA, DISH_WIDTH / 2, DISH_HEIGHT / 2)],
+      bacteria: [createBacterium(initialDNA, dishDimensions.width / 2, dishDimensions.height / 2)],
       food: []
     });
-  }, [createBacterium]);
+  }, [createBacterium, dishDimensions]);
 
   const update = useCallback((time: number) => {
     if (lastTimeRef.current !== undefined) {
