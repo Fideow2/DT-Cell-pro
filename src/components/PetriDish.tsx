@@ -14,6 +14,9 @@ interface Bacterium {
   energy: number;
   health: number;
   stats: ReturnType<typeof calculateStats>;
+  // 缓存网格坐标，避免重复计算
+  gridX: number;
+  gridY: number;
 }
 
 interface Food {
@@ -27,6 +30,7 @@ interface PetriDishProps {
   onBack: () => void;
 }
 
+// 性能优化常量
 const MAX_BACTERIA = 50;
 const FOOD_SPAWN_RATE = 0.05;
 const MAX_FOOD = 30;
@@ -34,13 +38,94 @@ const ENERGY_LOSS_PER_FRAME = 0.08;
 const REPRODUCTION_ENERGY = 150;
 const MUTATION_RATE = 0.2;
 const DETECTION_RANGE = 150;
+const DETECTION_RANGE_SQ = DETECTION_RANGE * DETECTION_RANGE; // 平方距离，避免 sqrt
 const GRID_SIZE = 50;
+const ATTACK_RANGE = 40;
+const ATTACK_RANGE_SQ = ATTACK_RANGE * ATTACK_RANGE; // 平方距离
+
+// 空间网格类 - 用于高效碰撞检测
+class SpatialGrid {
+  private cells: Map<string, Bacterium[]> = new Map();
+  private gridSize: number;
+
+  constructor(gridSize: number) {
+    this.gridSize = gridSize;
+  }
+
+  clear() {
+    this.cells.clear();
+  }
+
+  getKey(x: number, y: number): string {
+    const gx = Math.floor(x / this.gridSize);
+    const gy = Math.floor(y / this.gridSize);
+    return `${gx},${gy}`;
+  }
+
+  insert(b: Bacterium) {
+    const key = this.getKey(b.x, b.y);
+    if (!this.cells.has(key)) {
+      this.cells.set(key, []);
+    }
+    this.cells.get(key)!.push(b);
+  }
+
+  // 获取指定范围内的所有细菌
+  queryRange(x: number, y: number, range: number): Bacterium[] {
+    const results: Bacterium[] = [];
+    const rangeSq = range * range;
+    const gx = Math.floor(x / this.gridSize);
+    const gy = Math.floor(y / this.gridSize);
+    const cellRange = Math.ceil(range / this.gridSize);
+
+    for (let ix = gx - cellRange; ix <= gx + cellRange; ix++) {
+      for (let iy = gy - cellRange; iy <= gy + cellRange; iy++) {
+        const key = `${ix},${iy}`;
+        const cell = this.cells.get(key);
+        if (cell) {
+          for (const b of cell) {
+            const dx = b.x - x;
+            const dy = b.y - y;
+            if (dx * dx + dy * dy <= rangeSq) {
+              results.push(b);
+            }
+          }
+        }
+      }
+    }
+    return results;
+  }
+
+  // 获取相邻网格中的细菌（用于攻击检测）
+  queryNeighbors(x: number, y: number): Bacterium[] {
+    const results: Bacterium[] = [];
+    const gx = Math.floor(x / this.gridSize);
+    const gy = Math.floor(y / this.gridSize);
+
+    // 只检查相邻的 9 个网格
+    for (let ix = gx - 1; ix <= gx + 1; ix++) {
+      for (let iy = gy - 1; iy <= gy + 1; iy++) {
+        const key = `${ix},${iy}`;
+        const cell = this.cells.get(key);
+        if (cell) {
+          results.push(...cell);
+        }
+      }
+    }
+    return results;
+  }
+}
 
 const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
-  const [gameState, setGameState] = useState<{
-    bacteria: Bacterium[];
-    food: Food[];
-  }>({ bacteria: [], food: [] });
+  // 使用 ref 存储游戏状态，避免每帧触发 React 重渲染
+  const gameStateRef = useRef<{ bacteria: Bacterium[]; food: Food[] }>({ 
+    bacteria: [], 
+    food: [] 
+  });
+  const spatialGridRef = useRef(new SpatialGrid(GRID_SIZE));
+  
+  // 仅用于触发渲染的计数器
+  const [renderTick, setRenderTick] = useState(0);
   const [isFrozen, setIsFrozen] = useState(false);
   const [selectedCell, setSelectedCell] = useState<Bacterium | null>(null);
   const [dishDimensions, setDishDimensions] = useState({ width: 800, height: 600 });
@@ -49,18 +134,17 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
   const DISH_HEIGHT = dishDimensions.height;
   
   const requestRef = useRef<number | undefined>(undefined);
-  const lastTimeRef = useRef<number | undefined>(undefined);
+  const lastTimeRef = useRef<number>(0);
+  const frameCountRef = useRef(0);
 
-  // Calculate dish size based on viewport
+  // 计算 dish 大小
   useEffect(() => {
     const updateDimensions = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Reserve space for header (~8vh) and margins (~2vh)
       const availableHeight = vh * 0.88;
       const availableWidth = vw * 0.98;
       
-      // Maintain aspect ratio of 4:3
       let width = availableWidth;
       let height = availableWidth * 0.75;
       
@@ -94,10 +178,12 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
       energy: 100,
       health: 100,
       stats,
+      gridX: Math.floor(x / GRID_SIZE),
+      gridY: Math.floor(y / GRID_SIZE),
     };
   }, []);
 
-  const mutateDNA = (dna: CellDNA): CellDNA => {
+  const mutateDNA = useCallback((dna: CellDNA): CellDNA => {
     const newDna = { ...dna, seed: Math.random().toString(36).substr(2, 9) };
     const keys: (keyof CellDNA)[] = [
       'colorHue', 'size', 'eccentricity', 'eyeSize', 'eyeDistance', 
@@ -120,8 +206,9 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
       }
     });
     return newDna;
-  };
+  }, []);
 
+  // 初始化
   useEffect(() => {
     const initialDNA: CellDNA = {
       colorHue: Math.random() * 360,
@@ -135,182 +222,234 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
       tailWaviness: 0.5,
       seed: 'initial',
     };
-    setGameState({
+    gameStateRef.current = {
       bacteria: [createBacterium(initialDNA, dishDimensions.width / 2, dishDimensions.height / 2)],
       food: []
-    });
+    };
+    setRenderTick(t => t + 1);
   }, [createBacterium, dishDimensions]);
 
+  // 游戏主循环
   const update = useCallback((time: number) => {
-    if (lastTimeRef.current !== undefined) {
-      // 如果冷冻模式开启，停止所有更新
-      if (isFrozen) {
-        lastTimeRef.current = time;
-        requestRef.current = requestAnimationFrame(update);
-        return;
-      }
-      
-      setGameState(prev => {
-        const nextBacteria: Bacterium[] = [];
-        const nextFood = [...prev.food];
+    const deltaTime = time - lastTimeRef.current;
+    
+    // 限制更新频率为 60fps
+    if (deltaTime < 16.67) {
+      requestRef.current = requestAnimationFrame(update);
+      return;
+    }
+    
+    lastTimeRef.current = time;
+    
+    // 如果冷冻模式开启，只渲染不更新
+    if (isFrozen) {
+      requestRef.current = requestAnimationFrame(update);
+      return;
+    }
 
-        // 1. Build Spatial Grid for Food (Efficiency)
-        const grid: Record<string, Food[]> = {};
-        nextFood.forEach(f => {
-          const gx = Math.floor(f.x / GRID_SIZE);
-          const gy = Math.floor(f.y / GRID_SIZE);
-          const key = `${gx},${gy}`;
-          if (!grid[key]) grid[key] = [];
-          grid[key].push(f);
-        });
+    const state = gameStateRef.current;
+    const nextBacteria: Bacterium[] = [];
+    const nextFood = state.food;
 
-        // 2. Update Bacteria
-        prev.bacteria.forEach(b => {
-          let { x, y, vx, vy, ax, ay, energy, health } = b;
+    // 1. 构建食物空间网格
+    const foodGrid: Record<string, Food[]> = {};
+    for (let i = nextFood.length - 1; i >= 0; i--) {
+      const f = nextFood[i];
+      const gx = Math.floor(f.x / GRID_SIZE);
+      const gy = Math.floor(f.y / GRID_SIZE);
+      const key = `${gx},${gy}`;
+      if (!foodGrid[key]) foodGrid[key] = [];
+      foodGrid[key].push(f);
+    }
 
-          // Search for nearby food in the grid
-          let closestFood: Food | null = null;
-          let minDist = DETECTION_RANGE;
+    // 2. 重建细菌空间网格
+    spatialGridRef.current.clear();
+    for (const b of state.bacteria) {
+      spatialGridRef.current.insert(b);
+    }
 
-          const bgx = Math.floor(x / GRID_SIZE);
-          const bgy = Math.floor(y / GRID_SIZE);
-          const range = Math.ceil(DETECTION_RANGE / GRID_SIZE);
+    // 3. 更新细菌
+    for (const b of state.bacteria) {
+      let { x, y, vx, vy, ax, ay, energy, health } = b;
 
-          for (let ix = bgx - range; ix <= bgx + range; ix++) {
-            for (let iy = bgy - range; iy <= bgy + range; iy++) {
-              const cellFood = grid[`${ix},${iy}`];
-              if (cellFood) {
-                for (const f of cellFood) {
-                  const d = Math.sqrt((f.x - x) ** 2 + (f.y - y) ** 2);
-                  if (d < minDist) {
-                    minDist = d;
-                    closestFood = f;
-                  }
-                }
+      // 搜索附近食物 - 使用空间网格
+      let closestFood: Food | null = null;
+      let minDistSq = DETECTION_RANGE_SQ;
+
+      const bgx = Math.floor(x / GRID_SIZE);
+      const bgy = Math.floor(y / GRID_SIZE);
+      const range = Math.ceil(DETECTION_RANGE / GRID_SIZE);
+
+      for (let ix = bgx - range; ix <= bgx + range; ix++) {
+        for (let iy = bgy - range; iy <= bgy + range; iy++) {
+          const cellFood = foodGrid[`${ix},${iy}`];
+          if (cellFood) {
+            for (const f of cellFood) {
+              const dx = f.x - x;
+              const dy = f.y - y;
+              const distSq = dx * dx + dy * dy;
+              if (distSq < minDistSq) {
+                minDistSq = distSq;
+                closestFood = f;
               }
             }
           }
-
-          // Steering towards food
-          let nax = ax;
-          let nay = ay;
-
-          if (closestFood) {
-            const angle = Math.atan2(closestFood.y - y, closestFood.x - x);
-            const force = 0.2 * (b.stats.reaction / 50);
-            nax += Math.cos(angle) * force;
-            nay += Math.sin(angle) * force;
-          } else {
-            // Random roaming if no food nearby
-            nax += (Math.random() - 0.5) * 0.15;
-            nay += (Math.random() - 0.5) * 0.15;
-          }
-          
-          // Damping on acceleration
-          nax *= 0.85;
-          nay *= 0.85;
-
-          // Update velocity with acceleration
-          vx += nax;
-          vy += nay;
-
-          // Apply friction to velocity
-          vx *= 0.99;
-          vy *= 0.99;
-
-          // Speed limit based on DNA stats
-          const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-          const maxAllowedSpeed = (b.stats.speed / 30); 
-          if (currentSpeed > maxAllowedSpeed) {
-            vx = (vx / currentSpeed) * maxAllowedSpeed;
-            vy = (vy / currentSpeed) * maxAllowedSpeed;
-          }
-
-          // Move
-          let nx = x + vx;
-          let ny = y + vy;
-
-          // Bounce
-          if (nx < 0 || nx > DISH_WIDTH) {
-            vx *= -0.5;
-            nax *= -1;
-          }
-          if (ny < 0 || ny > DISH_HEIGHT) {
-            vy *= -0.5;
-            nay *= -1;
-          }
-          nx = Math.max(0, Math.min(DISH_WIDTH, nx));
-          ny = Math.max(0, Math.min(DISH_HEIGHT, ny));
-
-          // Energy and Health loss (Larger cells consume more energy)
-          energy -= ENERGY_LOSS_PER_FRAME * b.dna.size;
-
-          // Starvation: if energy is 0, lose health
-          if (energy <= 0) {
-            energy = 0;
-            // Larger cells lose health faster when starving
-            health -= 0.5 * b.dna.size; 
-          }
-
-          if (health <= 0) return; // Dead
-
-          // Interaction with food (Eating)
-          const foodIndex = nextFood.findIndex(f => {
-            const dist = Math.sqrt((f.x - nx) ** 2 + (f.y - ny) ** 2);
-            return dist < 20 * b.dna.size;
-          });
-          if (foodIndex !== -1) {
-            energy += nextFood[foodIndex].energy;
-            health = Math.min(100, health + 10); // Eating restores health
-            nextFood.splice(foodIndex, 1);
-          }
-
-          // Interaction with other bacteria (Attack)
-          prev.bacteria.forEach(other => {
-            if (b.id === other.id) return;
-            const dist = Math.sqrt((other.x - nx) ** 2 + (other.y - ny) ** 2);
-            const colorDiff = Math.abs(b.dna.colorHue - other.dna.colorHue);
-            const isEnemy = Math.min(colorDiff, 360 - colorDiff) > 45;
-
-            if (dist < 40 * b.dna.size && isEnemy) {
-              // I am being attacked by 'other'
-              const damage = (other.stats.attack / b.stats.defense) * 0.1;
-              health -= damage;
-              // Small knockback from the attacker
-              const angle = Math.atan2(ny - other.y, nx - other.x);
-              vx += Math.cos(angle) * 0.2;
-              vy += Math.sin(angle) * 0.2;
-            }
-          });
-
-          if (health <= 0) return; // Dead
-
-          // Reproduction
-          if (energy >= REPRODUCTION_ENERGY && nextBacteria.length + prev.bacteria.length < MAX_BACTERIA) {
-            energy /= 2;
-            const childDna = mutateDNA(b.dna);
-            nextBacteria.push(createBacterium(childDna, nx + (Math.random() - 0.5) * 20, ny + (Math.random() - 0.5) * 20));
-          }
-
-          nextBacteria.push({ ...b, x: nx, y: ny, vx, vy, ax: nax, ay: nay, energy, health });
-        });
-
-        // 3. Spawn food
-        if (nextFood.length < MAX_FOOD && Math.random() < FOOD_SPAWN_RATE) {
-          nextFood.push({
-            id: Math.random().toString(36).substr(2, 9),
-            x: Math.random() * DISH_WIDTH,
-            y: Math.random() * DISH_HEIGHT,
-            energy: 40,
-          });
         }
+      }
 
-        return { bacteria: nextBacteria, food: nextFood };
+      // 转向食物
+      let nax = ax;
+      let nay = ay;
+
+      if (closestFood) {
+        const angle = Math.atan2(closestFood.y - y, closestFood.x - x);
+        const force = 0.2 * (b.stats.reaction / 50);
+        nax += Math.cos(angle) * force;
+        nay += Math.sin(angle) * force;
+      } else {
+        // 随机漫游
+        nax += (Math.random() - 0.5) * 0.15;
+        nay += (Math.random() - 0.5) * 0.15;
+      }
+      
+      // 加速度阻尼
+      nax *= 0.85;
+      nay *= 0.85;
+
+      // 更新速度
+      vx += nax;
+      vy += nay;
+
+      // 速度摩擦
+      vx *= 0.99;
+      vy *= 0.99;
+
+      // 速度限制
+      const currentSpeedSq = vx * vx + vy * vy;
+      const maxAllowedSpeed = (b.stats.speed / 30); 
+      const maxAllowedSpeedSq = maxAllowedSpeed * maxAllowedSpeed;
+      
+      if (currentSpeedSq > maxAllowedSpeedSq) {
+        const scale = maxAllowedSpeed / Math.sqrt(currentSpeedSq);
+        vx *= scale;
+        vy *= scale;
+      }
+
+      // 移动
+      let nx = x + vx;
+      let ny = y + vy;
+
+      // 边界反弹
+      if (nx < 0 || nx > DISH_WIDTH) {
+        vx *= -0.5;
+        nax *= -1;
+      }
+      if (ny < 0 || ny > DISH_HEIGHT) {
+        vy *= -0.5;
+        nay *= -1;
+      }
+      nx = Math.max(0, Math.min(DISH_WIDTH, nx));
+      ny = Math.max(0, Math.min(DISH_HEIGHT, ny));
+
+      // 能量和健康损失
+      energy -= ENERGY_LOSS_PER_FRAME * b.dna.size;
+
+      // 饥饿：能量为 0 时损失健康
+      if (energy <= 0) {
+        energy = 0;
+        health -= 0.5 * b.dna.size; 
+      }
+
+      if (health <= 0) continue; // 死亡
+
+      // 吃食物 - 使用平方距离比较
+      const eatRangeSq = (20 * b.dna.size) ** 2;
+      let ateFood = false;
+      for (let i = nextFood.length - 1; i >= 0; i--) {
+        const f = nextFood[i];
+        const dx = f.x - nx;
+        const dy = f.y - ny;
+        if (dx * dx + dy * dy < eatRangeSq) {
+          energy += f.energy;
+          health = Math.min(100, health + 10);
+          nextFood.splice(i, 1);
+          ateFood = true;
+          break;
+        }
+      }
+
+      // 攻击检测 - 使用空间网格优化，O(n²) -> O(n)
+      const neighbors = spatialGridRef.current.queryNeighbors(nx, ny);
+      for (const other of neighbors) {
+        if (b.id === other.id) continue;
+        
+        const dx = other.x - nx;
+        const dy = other.y - ny;
+        const distSq = dx * dx + dy * dy;
+        
+        // 使用平方距离比较，避免 sqrt
+        const attackRange = ATTACK_RANGE * b.dna.size;
+        if (distSq < attackRange * attackRange) {
+          const colorDiff = Math.abs(b.dna.colorHue - other.dna.colorHue);
+          const isEnemy = Math.min(colorDiff, 360 - colorDiff) > 45;
+
+          if (isEnemy) {
+            // 被攻击
+            const damage = (other.stats.attack / b.stats.defense) * 0.1;
+            health -= damage;
+            // 击退效果
+            const angle = Math.atan2(ny - other.y, nx - other.x);
+            vx += Math.cos(angle) * 0.2;
+            vy += Math.sin(angle) * 0.2;
+          }
+        }
+      }
+
+      if (health <= 0) continue; // 死亡
+
+      // 繁殖
+      if (energy >= REPRODUCTION_ENERGY && nextBacteria.length + state.bacteria.length < MAX_BACTERIA) {
+        energy /= 2;
+        const childDna = mutateDNA(b.dna);
+        nextBacteria.push(createBacterium(childDna, nx + (Math.random() - 0.5) * 20, ny + (Math.random() - 0.5) * 20));
+      }
+
+      nextBacteria.push({ 
+        ...b, 
+        x: nx, 
+        y: ny, 
+        vx, 
+        vy, 
+        ax: nax, 
+        ay: nay, 
+        energy, 
+        health,
+        gridX: Math.floor(nx / GRID_SIZE),
+        gridY: Math.floor(ny / GRID_SIZE),
       });
     }
-    lastTimeRef.current = time;
+
+    // 生成食物
+    if (nextFood.length < MAX_FOOD && Math.random() < FOOD_SPAWN_RATE) {
+      nextFood.push({
+        id: Math.random().toString(36).substr(2, 9),
+        x: Math.random() * DISH_WIDTH,
+        y: Math.random() * DISH_HEIGHT,
+        energy: 40,
+      });
+    }
+
+    // 更新状态
+    gameStateRef.current = { bacteria: nextBacteria, food: nextFood };
+    
+    // 每 2 帧触发一次渲染（30fps 渲染）
+    frameCountRef.current++;
+    if (frameCountRef.current % 2 === 0) {
+      setRenderTick(t => t + 1);
+    }
+
     requestRef.current = requestAnimationFrame(update);
-  }, [createBacterium, isFrozen]);
+  }, [createBacterium, mutateDNA, isFrozen, DISH_WIDTH, DISH_HEIGHT]);
 
   useEffect(() => {
     requestRef.current = requestAnimationFrame(update);
@@ -327,21 +466,22 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
 
   const handleDeleteCell = () => {
     if (selectedCell) {
-      setGameState(prev => ({
-        ...prev,
-        bacteria: prev.bacteria.filter(b => b.id !== selectedCell.id)
-      }));
+      gameStateRef.current.bacteria = gameStateRef.current.bacteria.filter(b => b.id !== selectedCell.id);
       setSelectedCell(null);
+      setRenderTick(t => t + 1);
     }
   };
+
+  // 使用 ref 中的数据渲染
+  const { bacteria, food } = gameStateRef.current;
 
   return (
     <div className="petri-dish-container">
       <div className="petri-dish-header">
         <button className="dish-back-btn" onClick={onBack}>← 返回菜单</button>
-        <h1>培养皿模式</h1>
+        <h1>培养皿模式 (优化版)</h1>
         <div className="stats">
-          数量: {gameState.bacteria.length} | 食物: {gameState.food.length}
+          数量: {bacteria.length} | 食物: {food.length}
         </div>
         <button 
           className="freeze-btn" 
@@ -363,14 +503,14 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
         width: `${DISH_WIDTH}px`, 
         height: `${DISH_HEIGHT}px`,
       }}>
-        {gameState.food.map(f => (
+        {food.map(f => (
           <div 
             key={f.id} 
             className="food" 
             style={{ left: f.x, top: f.y }}
           />
         ))}
-        {gameState.bacteria.map(b => {
+        {bacteria.map(b => {
           const flipX = b.vx < 0;
           const rotation = (flipX ? Math.atan2(b.vy, -b.vx) : Math.atan2(b.vy, b.vx)) * 180 / Math.PI;
           
