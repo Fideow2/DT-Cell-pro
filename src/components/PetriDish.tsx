@@ -390,7 +390,7 @@ const PetriDish: React.FC<PetriDishProps> = ({ onBack }) => {
                 padding: '10px'
               }}
             >
-              <Cell dna={b.dna} id={b.id} rotation={rotation} flipX={flipX} />
+              <Cell dna={b.dna} id={b.id} rotation={rotation} flipX={flipX} animated={false} />
               <div className="health-bar">
                 <div className="health-fill" style={{ width: `${b.health}%` }} />
               </div>

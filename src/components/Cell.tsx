@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AVAILABLE_ITEMS } from './items';
 
 export interface CellDNA {
@@ -101,9 +101,55 @@ interface CellProps {
   id?: string;
   rotation?: number; // in degrees
   flipX?: boolean;
+  animated?: boolean; // Enable idle animations
+  disableBobbing?: boolean; // Disable body bobbing (for swimming)
+  attackProgress?: number; // 0-1, attack animation progress
 }
 
-const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = false }) => {
+const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = false, animated = true, disableBobbing = false, attackProgress = 0 }) => {
+  // Animation states
+  const [time, setTime] = useState(0);
+  const [isBlinking, setIsBlinking] = useState(false);
+  const animationRef = useRef<number | null>(null);
+  const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Animation loop
+  useEffect(() => {
+    if (!animated) return;
+
+    const animate = () => {
+      setTime(t => t + 0.05);
+      animationRef.current = requestAnimationFrame(animate);
+    };
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [animated]);
+
+  // Blinking logic
+  useEffect(() => {
+    if (!animated) return;
+
+    const scheduleBlink = () => {
+      const delay = 2000 + Math.random() * 4000; // 2-6 seconds between blinks
+      blinkTimeoutRef.current = setTimeout(() => {
+        setIsBlinking(true);
+        setTimeout(() => setIsBlinking(false), 150); // Blink duration
+        scheduleBlink();
+      }, delay);
+    };
+
+    scheduleBlink();
+    return () => {
+      if (blinkTimeoutRef.current) {
+        clearTimeout(blinkTimeoutRef.current);
+      }
+    };
+  }, [animated]);
   const {
     colorHue,
     size,
@@ -171,28 +217,47 @@ const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = 
   const finalMouthStartY = clampedMouthStartY;
   const finalMouthEndY = clampedMouthEndY;
 
-  // Tail calculations
+  // Tail calculations with animation
   const tailBaseX = -rx * 0.85; 
   const tailBaseY = 0;
   const actualTailLength = 80 * tailLength * size;
   const waveAmplitude = 10 * size;
   
+  // Animation phase for tail wagging
+  const tailPhase = animated ? time * (1 + tailWaviness * 0.3) : 0;
+  
   let tailPath = `M ${tailBaseX} ${tailBaseY}`;
   
-  // Generate tail path
+  // Generate tail path with animated wave
   const steps = 40;
   for (let i = 1; i <= steps; i++) {
       const t = i / steps;
       const x = tailBaseX - t * actualTailLength;
-      // Sine wave: sin(t * PI * 2 * waviness)
+      // Animated sine wave: sin(t * PI * 2 * waviness + time)
       // Amplitude tapers off slightly towards the end (1 - t*0.5)
-      const y = tailBaseY + Math.sin(t * Math.PI * 2 * tailWaviness) * waveAmplitude * (1 - t * 0.3);
+      const waveOffset = Math.sin(t * Math.PI * 2 * tailWaviness + tailPhase) * waveAmplitude * (1 - t * 0.3);
+      const y = tailBaseY + waveOffset;
       tailPath += ` L ${x} ${y}`;
   }
 
+  // Body bobbing animation (disabled when swimming)
+  const bodyOffsetY = animated && !disableBobbing ? Math.sin(time * 2) * 3 * size : 0;
+
   // Eye Shape (Angry/Determined look from image)
   // A semi-circle or flattened top ellipse
-  const getEyePath = (cx: number, cy: number, r: number) => {
+  const getEyePath = (cx: number, cy: number, r: number, blinking: boolean = false) => {
+    // When blinking, draw a closed line (flat line)
+    if (blinking) {
+      const lineY = cy + r * 0.2;
+      return `
+        M ${cx - r} ${lineY}
+        L ${cx + r} ${lineY}
+        L ${cx + r} ${lineY + 2}
+        L ${cx - r} ${lineY + 2}
+        Z
+      `;
+    }
+
     // Simple flat top eye
     // Top is flat, bottom is round
     const topY = cy - r * 0.5; // Flattened top
@@ -272,7 +337,7 @@ const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = 
     content: (
       <path
         key="eye"
-        d={getEyePath(frontEyeX, frontEyeY, eyeBaseRadius)}
+        d={getEyePath(frontEyeX, frontEyeY, eyeBaseRadius, isBlinking)}
         fill="black"
       />
     )
@@ -329,6 +394,17 @@ const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = 
        transform += ` translate(${itemCenterX}, ${itemCenterY}) scale(-1, 1) translate(${-itemCenterX}, ${-itemCenterY})`;
     }
     
+    // Attack animation for spear - thrust forward
+    if (item.id === 'spear' && attackProgress > 0) {
+      // Calculate thrust offset based on attack progress
+      // Progress goes from 1 to 0, peak thrust at start
+      const thrustAmount = attackProgress * 25 * size; // pixels to thrust
+      // Thrust in the direction the item is facing
+      const thrustX = thrustAmount;
+      const thrustY = -thrustAmount * 0.2; // slight upward angle
+      transform += ` translate(${thrustX}, ${thrustY}) scale(1.3, 1)`;
+    }
+    
     // Default zIndices: Head=20, Hand=5, Body=1
     const defaultZ = item.type === 'head' ? 20 : (item.type === 'main-hand' || item.type === 'off-hand') ? 5 : 1;
 
@@ -352,7 +428,7 @@ const Cell: React.FC<CellProps> = ({ dna, items = [], id, rotation = 0, flipX = 
   // Sort layers by zIndex
   layers.sort((a, b) => a.zIndex - b.zIndex);
 
-  const transform = `${flipX ? 'scale(-1, 1)' : ''} rotate(${rotation})`;
+  const transform = `${flipX ? 'scale(-1, 1)' : ''} rotate(${rotation}) translate(0, ${bodyOffsetY})`;
 
   return (
     <div className="cell-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

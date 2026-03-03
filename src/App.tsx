@@ -2,12 +2,13 @@ import { useState } from 'react';
 import './App.css';
 import Cell, { calculateStats } from './components/Cell';
 import type { CellDNA } from './components/Cell';
+import Arena from './components/Arena';
 import { AVAILABLE_ITEMS } from './components/items';
 import Menu from './components/Menu';
 import PetriDish from './components/PetriDish';
 
 function App() {
-  const [view, setView] = useState<'menu' | 'game' | 'petri-dish'>('menu');
+  const [view, setView] = useState<'menu' | 'game' | 'petri-dish' | 'arena'>('menu');
   const [dna, setDna] = useState<CellDNA>({
     colorHue: 80, // Lime Green
     size: 1,
@@ -47,11 +48,21 @@ function App() {
   const stats = calculateStats(dna, items);
 
   if (view === 'menu') {
-    return <Menu onStartGame={() => setView('game')} onStartPetriDish={() => setView('petri-dish')} />;
+    return <Menu 
+      onStartGame={() => setView('game')} 
+      onStartPetriDish={() => setView('petri-dish')}
+      onStartArena={() => setView('arena')}
+      cellDna={dna}
+      cellItems={items}
+    />;
   }
 
   if (view === 'petri-dish') {
     return <PetriDish onBack={() => setView('menu')} />;
+  }
+
+  if (view === 'arena') {
+    return <Arena onBack={() => setView('menu')} playerDna={dna} playerItems={items.filter(i => i === 'spear')} />;
   }
 
   return (

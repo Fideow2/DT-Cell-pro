@@ -1,0 +1,204 @@
+.arena-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  overflow: hidden;
+}
+
+.arena-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 2px solid #10b981;
+  z-index: 100;
+}
+
+.arena-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #10b981;
+  font-weight: 700;
+}
+
+.arena-back-btn {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  background: transparent;
+  border: 2px solid #64748b;
+  border-radius: 8px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.arena-back-btn:hover {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.arena-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 1rem;
+  color: #e2e8f0;
+}
+
+.arena-stats span {
+  background: rgba(16, 185, 129, 0.2);
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.arena-canvas {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: crosshair;
+  outline: none;
+}
+
+.arena-world {
+  position: absolute;
+  background: #0c4a3d;
+  border: 4px solid #059669;
+  box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.5);
+}
+
+.arena-grid {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+
+.arena-food {
+  position: absolute;
+  background: radial-gradient(circle, #34d399 0%, #10b981 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  animation: foodPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes foodPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.arena-cell {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.1s;
+}
+
+.arena-cell svg {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+.cell-health-bar {
+  position: absolute;
+  top: -8px;
+  width: 40px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cell-health-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ef4444 0%, #10b981 100%);
+  transition: width 0.2s;
+}
+
+/* Attack cooldown bar - below cell, blue color */
+.cell-cooldown-bar {
+  position: absolute;
+  bottom: -8px;
+  width: 40px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.cooldown-track-blue {
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.cooldown-fill-blue {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  transition: width 0.1s linear;
+  border-radius: 1px;
+}
+
+.attack-indicator {
+  position: absolute;
+  border: 3px solid rgba(239, 68, 68, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+
+.arena-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Blood drop - teardrop shape */
+.blood-drop {
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  pointer-events: none;
+  transform-origin: center bottom;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+}
+
+.blood-drop::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 3px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+.arena-controls {
+  padding: 12px 24px;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px solid #334155;
+  text-align: center;
+}
+
+.arena-controls p {
+  margin: 4px 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.arena-controls p:first-child {
+  color: #10b981;
+  font-weight: 600;
+}
